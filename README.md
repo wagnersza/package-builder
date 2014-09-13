@@ -39,7 +39,7 @@ $ package-builder --build
 
 ## Test packages builded
 
-Testing the generated packet into a clean container
+Testing the generated package into a clean container
 
 ```bash
 $ package-builder --test
