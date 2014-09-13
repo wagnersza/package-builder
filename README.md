@@ -5,7 +5,7 @@ Builds OS packages inside a docker container. A Dockerfile and build context are
 After the build, you can test the package inside a new docker container only using the parameter --test.
 
 > now is only suported for Mac OS, and RPM packages  
-> issues and pull requests are welcome.
+> suggestions, issues and pull requests are welcome.
 
 ## Install
 
