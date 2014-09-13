@@ -1,0 +1,7 @@
+*.spec
+*.rpm
+*.tar
+*.gz
+dist
+MANIFEST
+package_builder.egg-info
