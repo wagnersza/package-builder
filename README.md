@@ -4,8 +4,8 @@ Builds OS packages inside a docker container. A Dockerfile and build context are
 generated to construct the package development environment. Then build command is executed  
 and the build results are extracted.
 
-After the build, you can test the package inside a new docker container only using the  
-parameter --test.
+After the build, you can test the package inside a new docker container only  
+using --test parameter.
 
 > now is only suported for Mac OS, and RPM packages  
 > suggestions, issues and pull requests are welcome.
@@ -53,7 +53,7 @@ $ package-builder --test
 ## Select Docker image to build a package
 
 Now by default package-builder uses **centos:centos7** image, but can changed  
-using the parameter --image
+using --image parameter
 
 > see the options in https://registry.hub.docker.com
 
