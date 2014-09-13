@@ -49,7 +49,8 @@ $ package-builder --test
 
 ## Select Docker image to build a package
 
-Now by default package-builder uses centos:centos7 image, but can changed using the parameter --image
+Now by default package-builder uses centos:centos7 image, but can changed using  
+the parameter --image
 
 > see the options in https://registry.hub.docker.com
 
