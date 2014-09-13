@@ -27,7 +27,7 @@ The package-builder expects to be inside a directory that contains the spec file
 It scans the package looking for sources, put inside the docker image and run the build command.
 
 > the package-builder supports using the url of the source to automatically download into the container
-> now package-builder don't convert spec variables, you must use the full name.  
+> now package-builder don't convert spec variables, you must use the full name. #4  
 > for instance:  
 > not suported: Source0: http://meupacote.com/%{name}-%{version}.tar.gz  
 > suported: Source0: http://meupacote.com/pacote-0.0.1.tar.gz  
