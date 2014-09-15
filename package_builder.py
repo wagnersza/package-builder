@@ -24,7 +24,7 @@ args = parser.parse_args()
 def make_docker_file():
     file = open ('Dockerfile', 'w')
     file.write("FROM %s\n\n" % (args.image,))
-    file.write("MAINTAINER Wagner Souza <wagnersza@gmial.com>\n\n")
+    file.write("MAINTAINER Wagner Souza <wagnersza@gmail.com>\n\n")
     file.write("RUN yum install rpmdevtools wget -y\n")
     file.write("RUN yum groupinstall 'Development Tools' -y\n")
     file.write("RUN rpmdev-setuptree\n\n")
@@ -44,7 +44,7 @@ def make_docker_file_test():
 
     file = open ('./test/Dockerfile', 'w')
     file.write("FROM %s\n\n" % (args.image,))
-    file.write("MAINTAINER Wagner Souza <wagnersza@gmial.com>\n\n")
+    file.write("MAINTAINER Wagner Souza <wagnersza@gmail.com>\n\n")
     file.close()
     return file
     
