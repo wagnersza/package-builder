@@ -5,3 +5,4 @@
 dist
 MANIFEST
 package_builder.egg-info
+Dockerfile
