@@ -29,13 +29,11 @@ def make_docker_file():
     file.write("RUN yum groupinstall 'Development Tools' -y\n")
     file.write("RUN rpmdev-setuptree\n\n")
     file.close()
-    return file
 
 def add_build_require(rpm):
     file = open ('Dockerfile', 'a')
     file.write("\nRUN yum install -y %s\n" % (rpm,))
     file.close()
-    # return file
 
 def make_docker_file_test():
     test_dir = './test'
@@ -46,7 +44,6 @@ def make_docker_file_test():
     file.write("FROM %s\n\n" % (args.image,))
     file.write("MAINTAINER Wagner Souza <wagnersza@gmail.com>\n\n")
     file.close()
-    return file
     
 def add_spec_to_file(spec_file):
     file = open ('Dockerfile', 'a')
@@ -59,14 +56,12 @@ def add_source_to_file(source_files):
     file.write("\nADD %s /rpmbuild/SOURCES/\n" % (source_files,))
     file.close()
 
+def get_docker_host():
+    shellinit = os.popen("boot2docker shellinit").read()
+    return shellinit.strip().split("=")
 
 def main():
-    shellinit = os.popen("boot2docker shellinit").read()
-    env_docker_host = shellinit.strip().split("=")
-
-    docker = docker_client.Client(base_url=env_docker_host[1],timeout=3000)
-    # without parameters
-
+    
     # Start: package-builder --start
     if args.start == True:
         print '\n - instaling boot2docker ...\n'
@@ -75,7 +70,11 @@ def main():
         os.system("boot2docker init")
         os.system("boot2docker up")
         print '\n - setting DOCKER_HOST env variable ...\n'
-        os.putenv('DOCKER_HOST', env_docker_host[1]); os.system('bash')
+        docker_host = get_docker_host()
+        os.putenv('DOCKER_HOST', docker_host[1]); os.system('bash')
+
+    docker_host = get_docker_host()
+    docker = docker_client.Client(base_url=docker_host[1],timeout=3000)
 
     # Build: packege-builder --build
     if args.build == True:
