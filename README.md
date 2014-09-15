@@ -13,7 +13,7 @@ using --test parameter.
 ## Install
 
 ```bash
-$ pip install git+https://github.com/wagnersza/package-builder@0.0.1
+$ pip install git+https://github.com/wagnersza/package-builder@0.0.2
 ```
 ## Preparing environment
 
