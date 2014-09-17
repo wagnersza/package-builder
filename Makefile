@@ -3,6 +3,7 @@
 # license that can be found in the LICENSE file.
 #
 CWD="`pwd`"
+PYTHONPATH = $(CWD)
 PROJECT_HOME ?= $(CWD)
 PROJECT_CODE =$(PROJECT_HOME)
 PROJECT_TEST =$(PROJECT_HOME)/tests
