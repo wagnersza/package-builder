@@ -1,12 +1,18 @@
+"""
+Docker-related utilities for building RPM packages.
+"""
+
 #!/usr/bin/env python
- 
+
 import unittest
 import os
 from package_builder import package_builder
 
+
 class TestPackageBuilder(unittest.TestCase):
+    "Package Builder TestCase"
     docker_image = "centos:centos7"
-    lines = [        
+    lines = [
         "FROM %s\n" % (docker_image,),
         'RUN yum install rpmdevtools wget -y\n',
         'RUN yum groupinstall "Development Tools" -y\n',
@@ -14,9 +20,11 @@ class TestPackageBuilder(unittest.TestCase):
     ]
 
     def clean(self):
+        "clean all"
         pass
 
     def setUp(self):
+        "create ./test directory"
         test_dir = './test'
         if not os.path.exists(test_dir):
             os.makedirs(test_dir)
@@ -24,34 +32,39 @@ class TestPackageBuilder(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_make_docker_file_default(self):
+    def test_docker_lines(self):
+        "test docker lines"
+        docker_image = "centos:centos7"
+        lines = [
+            "FROM %s\n" % (docker_image,),
+            'RUN yum install rpmdevtools wget -y\n',
+            'RUN yum groupinstall "Development Tools" -y\n',
+            'RUN rpmdev-setuptree\n',
+        ]
+        self.assertEqual(lines, package_builder.file_lines(docker_image))
+
+    def test_make_docker_file_rpmbuild(self):
+        "test rpmbuild docker file content"
         docker_file = "Dockerfile"
-        if docker_file == 'Dockerfile':
-            file_lines = self.lines
-        else:
-            file_lines = self.lines[0]
+        docker_image = "centos:centos7"
+        package_builder.make_docker_file_rpmbuild(docker_file, docker_image)
+        with open(docker_file, "r") as d_file:
+            read_file_lines = d_file.readlines()
+        self.assertEqual(read_file_lines, self.lines)
 
-        package_builder.make_docker_file(docker_file, self.docker_image)
-        with open(docker_file, "r") as f:
-            read_file_lines = f.readlines()
-    
-        self.assertEqual(read_file_lines, file_lines)
+    def test_make_docker_file_default(self):
+        "test default docker file content"
+        docker_file = "./test/Dockerfile"
+        docker_image = "centos:centos7"
+        file_lines = package_builder.file_lines(docker_image)
+        file_lines_read = file_lines[0]
+        array = []
+        array.insert(0, file_lines_read)
+        package_builder.make_docker_file_default(docker_file, docker_image)
+        with open(docker_file, "r") as d_file:
+            read_file_lines = d_file.readlines()
+        self.assertEqual(read_file_lines, array)
 
-    def test_make_docker_file_test(self):
-        docker_file = "./test/Dockerfile"        
-        if docker_file == 'Dockerfile':
-            file_lines = self.lines
-        else:
-            file_lines = self.lines[0]
 
-        package_builder.make_docker_file(docker_file, self.docker_image)
-        with open(docker_file, "r") as f:
-            lines = f.readlines()
-            read_file_lines = lines[0]
-    
-        self.assertEqual(read_file_lines, file_lines)
-
-        
 if __name__ == '__main__':
-	unittest.main()
-
+    unittest.main()

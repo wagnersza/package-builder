@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
+
 import docker as docker_client
 import os
 import argparse
@@ -21,23 +22,26 @@ parser.add_argument("-i", "--image", default='centos:centos7', help="docker imag
 
 args = parser.parse_args()
 
-def make_docker_file(docker_file, docker_image):
-
+def file_lines(docker_image):
     lines = [        
         "FROM %s\n" % (docker_image),
         'RUN yum install rpmdevtools wget -y\n',
         'RUN yum groupinstall "Development Tools" -y\n',
         'RUN rpmdev-setuptree\n',
-    ]
+    ]    
+    return lines
 
-    if docker_file == "Dockerfile":
-        file_lines = lines
-    else:
-        file_lines = lines[0]
-
-    with open ( docker_file, 'w') as f:
-        f.writelines(file_lines)
+def make_docker_file_rpmbuild(docker_file, docker_image):
+    file_lines_read = file_lines(docker_image)
+    with open ( docker_file, 'w') as d_file:
+        d_file.writelines(file_lines_read)
         
+def make_docker_file_default(docker_file, docker_image):
+    file_lines_read = file_lines(docker_image)
+    array = file_lines_read[0]
+    with open ( docker_file, 'w') as d_file:
+        d_file.writelines(array)
+
 def add_build_require(rpm):
     file = open ('Dockerfile', 'a')
     file.write("\nRUN yum install -y %s\n" % (rpm,))
