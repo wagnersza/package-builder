@@ -45,17 +45,29 @@ def make_docker_file_default(docker_file, docker_image):
 def get_spec_file_name():
     ls = os.listdir(".")
     spec_file_name = filter(lambda x:'spec' in x, ls)
-    return spec_file_name
+    return spec_file_name[0]
 
 def make_build_require_list():
-    spec = ger_spec_file_name()
-    build_require = filter(lambda x:'BuildRequires' in x, spec)
-    return build_require
+    spec_file = get_spec_file_name()
+    with open(spec_file, "r") as spec:
+        spec_lines = spec.readlines()
+    build_requires = filter(lambda x:'BuildRequires' in x, spec_lines)
+    build_require_list = []
+    for i in build_requires:
+        build_file = i.split()[1]
+        build_require_list.append(build_file)
+    return build_require_list
 
 def make_source_list():
-    spec = ger_spec_file_name()
-    sources = filter(lambda x:'Source' in x, spec)
-    return sources
+    spec_file = get_spec_file_name()
+    with open(spec_file, "r") as spec:
+        spec_lines = spec.readlines()
+    sources = filter(lambda x:'Source' in x, spec_lines)
+    source_list = []
+    for i in sources:
+        source_file = i.split()[1]
+        source_list.append(source_file)
+    return source_list
 
 def add_spec_file(spec_file):
     file_line = "\nCOPY %s /rpmbuild/SPECS/\n" % (spec_file,)
@@ -76,8 +88,6 @@ def make_docker_file_test():
     file.write("FROM %s\n\n" % (args.image,))
     file.write("MAINTAINER Wagner Souza <wagnersza@gmail.com>\n\n")
     file.close()
-    
-
 
 def add_source_to_file(source_files):
     file = open ('Dockerfile', 'a')

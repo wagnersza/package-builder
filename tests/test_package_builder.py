@@ -30,7 +30,7 @@ class TestPackageBuilder(unittest.TestCase):
             "Group:          tsuru\n",
             "License:        https://github.com/tsuru/tsuru/blob/0.6.2/LICENSE\n",
             "URL:            http://www.tsuru.io\n",
-            "Source0:        https://launchpad.net/~tsuru/+archive/ubuntu/ppa/+files/tsuru-server_0.6.2.1.orig.tar.gz\n",
+            "Source0:        file.tar.gz\n",
             "BuildRoot:      %{_tmppath}/%{name}-server-%{version}-%{release}-root-%(%{__id_u} -n)\n",
             "BuildRequires:  golang\n\n",
         ]
@@ -94,14 +94,22 @@ class TestPackageBuilder(unittest.TestCase):
     def test_get_spec_file_name(self):
         ""
         spec_file = "test.spec"
-        spec_file_list = []
-        spec_file_list.insert(0, spec_file)
-        get_spec_file = package_builder.get_spec_file_name()
-        self.assertEqual(get_spec_file, spec_file_list)
+        package_builder.get_spec_file_name()
+        self.assertEqual(package_builder.get_spec_file_name(), spec_file)
 
     def test_make_build_require_list(self):
         ""
-        pass
+        require = []
+        require.append("golang")
+        require_list = package_builder.make_build_require_list()
+        self.assertEqual(require_list, require)
+
+    def test_make_source_list(self):
+        ""
+        source = []
+        source.append("file.tar.gz")
+        source_list = package_builder.make_source_list()
+        self.assertEqual(source_list, source)
 
 if __name__ == '__main__':
     unittest.main()
