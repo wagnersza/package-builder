@@ -33,19 +33,39 @@ def file_lines(docker_image):
 
 def make_docker_file_rpmbuild(docker_file, docker_image):
     file_lines_read = file_lines(docker_image)
-    with open ( docker_file, 'w') as d_file:
+    with open(docker_file, 'w') as d_file:
         d_file.writelines(file_lines_read)
         
 def make_docker_file_default(docker_file, docker_image):
     file_lines_read = file_lines(docker_image)
     file_lines_list = file_lines_read[0]
-    with open ( docker_file, 'w') as d_file:
+    with open(docker_file, 'w') as d_file:
         d_file.writelines(file_lines_list)
 
+def get_spec_file_name():
+    ls = os.listdir(".")
+    spec_file_name = filter(lambda x:'spec' in x, ls)
+    return spec_file_name
+
+def make_build_require_list():
+    spec = ger_spec_file_name()
+    build_require = filter(lambda x:'BuildRequires' in x, spec)
+    return build_require
+
+def make_source_list():
+    spec = ger_spec_file_name()
+    sources = filter(lambda x:'Source' in x, spec)
+    return sources
+
+def add_spec_file(spec_file):
+    file_line = "\nCOPY %s /rpmbuild/SPECS/\n" % (spec_file,)
+    with open('Dockerfile', 'a') as d_file:
+        d_file.writelines(file_line)
+
 def add_build_require(rpm):
-    file = open ('Dockerfile', 'a')
-    file.write("\nRUN yum install -y %s\n" % (rpm,))
-    file.close()
+    file_line = "\nRUN yum install -y %s\n" % (rpm,)
+    with open('Dockerfile', 'a') as d_file:
+        d_file.writelines(file_line)
 
 def make_docker_file_test():
     test_dir = './test'
@@ -57,11 +77,7 @@ def make_docker_file_test():
     file.write("MAINTAINER Wagner Souza <wagnersza@gmail.com>\n\n")
     file.close()
     
-def add_spec_to_file(spec_file):
-    file = open ('Dockerfile', 'a')
-    file.write("\nCOPY %s /rpmbuild/SPECS/\n" % (spec_file,))
-    file.close()
-    # return file
+
 
 def add_source_to_file(source_files):
     file = open ('Dockerfile', 'a')

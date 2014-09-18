@@ -11,16 +11,34 @@ from package_builder import package_builder
 
 class TestPackageBuilder(unittest.TestCase):
     "Package Builder TestCase"
-    docker_image = "centos:centos7"
-    lines = [
-        "FROM %s\n" % (docker_image,),
-        'RUN yum install rpmdevtools wget -y\n',
-        'RUN yum groupinstall "Development Tools" -y\n',
-        'RUN rpmdev-setuptree\n',
-    ]
 
     def clean(self):
         "clean all"
+        if os.path.exists('./test'):
+            os.remove("./test/Dockerfile")
+            os.remove("./test")
+
+        if os.path.exists("test.spec"):
+            os.remove("test.spec")
+
+    def make_spec_file(self):
+        lines = [
+            "Name:     tsuru\n",
+            "Version:        0.6.2\n",
+            "Release:        1\n",
+            "Summary:        tsuru\n",
+            "Group:          tsuru\n",
+            "License:        https://github.com/tsuru/tsuru/blob/0.6.2/LICENSE\n",
+            "URL:            http://www.tsuru.io\n",
+            "Source0:        https://launchpad.net/~tsuru/+archive/ubuntu/ppa/+files/tsuru-server_0.6.2.1.orig.tar.gz\n",
+            "BuildRoot:      %{_tmppath}/%{name}-server-%{version}-%{release}-root-%(%{__id_u} -n)\n",
+            "BuildRequires:  golang\n\n",
+        ]
+        with open("test.spec", "w") as s_file:
+            s_file.writelines(lines)
+
+    def tearDown(self):
+        # self.clean()
         pass
 
     def setUp(self):
@@ -28,9 +46,17 @@ class TestPackageBuilder(unittest.TestCase):
         test_dir = './test'
         if not os.path.exists(test_dir):
             os.makedirs(test_dir)
-
-    def tearDown(self):
-        pass
+        self.make_spec_file()
+        
+    def docker_image_lines(self):
+        docker_image = "centos:centos7"
+        lines = [
+            "FROM %s\n" % (docker_image,),
+            'RUN yum install rpmdevtools wget -y\n',
+            'RUN yum groupinstall "Development Tools" -y\n',
+            'RUN rpmdev-setuptree\n',
+        ]
+        return lines
 
     def test_docker_lines(self):
         "test docker lines"
@@ -50,7 +76,7 @@ class TestPackageBuilder(unittest.TestCase):
         package_builder.make_docker_file_rpmbuild(docker_file, docker_image)
         with open(docker_file, "r") as d_file:
             read_file_lines = d_file.readlines()
-        self.assertEqual(read_file_lines, self.lines)
+        self.assertEqual(read_file_lines, self.docker_image_lines())
 
     def test_make_docker_file_default(self):
         "test default docker file content"
@@ -65,6 +91,17 @@ class TestPackageBuilder(unittest.TestCase):
             read_file_lines = d_file.readlines()
         self.assertEqual(read_file_lines, file_lines_list)
 
+    def test_get_spec_file_name(self):
+        ""
+        spec_file = "test.spec"
+        spec_file_list = []
+        spec_file_list.insert(0, spec_file)
+        get_spec_file = package_builder.get_spec_file_name()
+        self.assertEqual(get_spec_file, spec_file_list)
+
+    def test_make_build_require_list(self):
+        ""
+        pass
 
 if __name__ == '__main__':
     unittest.main()
