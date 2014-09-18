@@ -38,9 +38,9 @@ def make_docker_file_rpmbuild(docker_file, docker_image):
         
 def make_docker_file_default(docker_file, docker_image):
     file_lines_read = file_lines(docker_image)
-    array = file_lines_read[0]
+    file_lines_list = file_lines_read[0]
     with open ( docker_file, 'w') as d_file:
-        d_file.writelines(array)
+        d_file.writelines(file_lines_list)
 
 def add_build_require(rpm):
     file = open ('Dockerfile', 'a')

@@ -58,12 +58,12 @@ class TestPackageBuilder(unittest.TestCase):
         docker_image = "centos:centos7"
         file_lines = package_builder.file_lines(docker_image)
         file_lines_read = file_lines[0]
-        array = []
-        array.insert(0, file_lines_read)
+        file_lines_list = []
+        file_lines_list.insert(0, file_lines_read)
         package_builder.make_docker_file_default(docker_file, docker_image)
         with open(docker_file, "r") as d_file:
             read_file_lines = d_file.readlines()
-        self.assertEqual(read_file_lines, array)
+        self.assertEqual(read_file_lines, file_lines_list)
 
 
 if __name__ == '__main__':
