@@ -87,10 +87,11 @@ def append_build_require_to_docker_file():
         with open('Dockerfile', 'a') as d_file:
             d_file.writelines(file_line)
 
-def add_source_to_file(source_files):
-    file = open ('Dockerfile', 'a')
-    file.write("\nADD %s /rpmbuild/SOURCES/\n" % (source_files,))
-    file.close()
+def append_source_to_docker_file():
+    for i in make_source_list():
+        file_line = "ADD %s /rpmbuild/SOURCES/\n" % (i,)
+        with open('Dockerfile', 'a') as d_file:
+            d_file.writelines(file_line)
 
 def get_docker_host():
     shellinit = os.popen("boot2docker shellinit").read()

@@ -143,7 +143,14 @@ class TestPackageBuilder(unittest.TestCase):
             docker_file_lines = docker_lines.readlines()
         self.assertIn("RUN yum install -y %s\n" % (package_builder.make_build_require_list()[0],), docker_file_lines)
         self.assertIn("RUN yum install -y %s\n" % (package_builder.make_build_require_list()[1],), docker_file_lines)
-        
+
+    def test_append_source_to_docker_file(self):
+        self.make_docker_file()
+        package_builder.append_source_to_docker_file()
+        with open(self.docker_file_rpmbuild, "r") as docker_lines:
+            docker_file_lines = docker_lines.readlines()
+        self.assertIn("ADD %s /rpmbuild/SOURCES/\n" % (package_builder.make_source_list()[0],), docker_file_lines)
+        self.assertIn("ADD %s /rpmbuild/SOURCES/\n" % (package_builder.make_source_list()[1],), docker_file_lines)
 
 if __name__ == '__main__':
     unittest.main()
