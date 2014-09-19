@@ -1,26 +1,13 @@
 #! /usr/bin/python
 # -*- coding: utf-8 -*-
 
-
 import docker as docker_client
 import os
 import argparse
 import subprocess
 import sys
 import dockerpty
-
-parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
-
-parser.add_argument("-s", "--start", action="store_true", help="install and start local enviroment")
-parser.add_argument("-b", "--build", action="store_true", help="build OS package")
-parser.add_argument("-t", "--test", action="store_true", help="start shell with a clean container and copy package to test it") 
-parser.add_argument("-i", "--image", default='centos:centos7', help="docker image, default: centos:centos7, see the options in https://registry.hub.docker.com") 
-
-# if len(sys.argv)==1:
-#     parser.print_help()
-#     sys.exit(1)
-
-args = parser.parse_args()
+import platform
 
 def file_lines(docker_image):
     lines = [        
@@ -97,24 +84,42 @@ def get_docker_host():
     shellinit = os.popen("boot2docker shellinit").read()
     return shellinit.strip().split("=")
 
-# def main():
-#     pass
-    # Start: package-builder --start
-    # if args.start == True:
-    #     print '\n - instaling boot2docker ...\n'
-    #     os.system("brew install boot2docker")
-    #     print '\n - starting boot2docker ...\n'
-    #     os.system("boot2docker init")
-    #     os.system("boot2docker up")
-    #     print '\n - setting DOCKER_HOST env variable ...\n'
-    #     docker_host = get_docker_host()
-    #     os.putenv('DOCKER_HOST', docker_host[1]); os.system('bash')
+def install_docker():
+    # print platform.system()
+    if platform.system() == 'Darwin':
+        print '\n - instaling boot2docker ...\n'
+        os.system("brew install boot2docker")
+        print '\n - starting boot2docker ...\n'
+        os.system("boot2docker init")
+        os.system("boot2docker up")
+        print '\n - setting DOCKER_HOST env variable ...\n'
+        docker_host = get_docker_host()
+        os.putenv('DOCKER_HOST', docker_host[1]); os.system('bash')
+    else:
+        print "system not suported yet"
 
-    # docker_host = get_docker_host()
-    # docker = docker_client.Client(base_url=docker_host[1],timeout=3000)
 
-    # # Build: packege-builder --build
-    # if args.build == True:
+def main():
+    parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
+    parser.add_argument("-u", "--up", action="store_true", help="install and start local enviroment")
+    parser.add_argument("-b", "--build", action="store_true", help="build OS package")
+    parser.add_argument("-t", "--test", action="store_true", help="start shell with a clean container and copy package to test it") 
+    parser.add_argument("-i", "--image", default='centos:centos7', help="docker image, default: centos:centos7, see the options in https://registry.hub.docker.com") 
+
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args()
+
+    # Start: package-builder --up
+    if args.up == True:
+        install_docker()
+    
+    # Build: packege-builder --build
+    if args.build == True:
+        print 'build'
+        # make_docker_file_rpmbuild(docker_file, docker_image)
     #     # make_docker_file(docker_image)
 
     #     # get spec file name
@@ -175,5 +180,5 @@ def get_docker_host():
     #     os.system('docker build --tag="centos7:test" ./test')
     #     os.system('docker run -i -t -v /home/docker/RPMS:/RPMS -v /home/docker/SRPMS:/SRPMS centos7:test /bin/bash')
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()
