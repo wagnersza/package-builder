@@ -18,19 +18,19 @@ def file_lines(docker_image):
     ]    
     return lines
 
-def make_docker_file_rpmbuild(docker_file, docker_image):
+def make_docker_file_rpmbuild(docker_image):
     file_lines_read = file_lines(docker_image)
-    with open(docker_file, 'w') as d_file:
+    with open("Dockerfile", 'w') as d_file:
         d_file.writelines(file_lines_read)
         
-def make_docker_file_default(docker_file, docker_image):
+def make_docker_file_default(docker_image):
     test_dir = './test'
     if not os.path.exists(test_dir):
         os.makedirs(test_dir)
     
     file_lines_read = file_lines(docker_image)
     file_lines_list = file_lines_read[0]
-    with open(docker_file, 'w') as d_file:
+    with open("./test/Dockerfile", 'w') as d_file:
         d_file.writelines(file_lines_list)
 
 def get_spec_file_name():
@@ -84,6 +84,14 @@ def get_docker_host():
     shellinit = os.popen("boot2docker shellinit").read()
     return shellinit.strip().split("=")
 
+def get_docker_url():
+    docker_url = get_docker_host()
+    return docker_url[1]
+
+def get_docker_ip():
+    docker_ip = get_docker_url()
+    return docker_ip.split("//")[1].split(":")[0]
+
 def install_docker():
     # print platform.system()
     if platform.system() == 'Darwin':
@@ -112,73 +120,45 @@ def main():
 
     args = parser.parse_args()
 
+    # docker
+    docker = docker_client.Client(base_url=get_docker_url(),timeout=3000)
+
     # Start: package-builder --up
     if args.up == True:
         install_docker()
     
     # Build: packege-builder --build
     if args.build == True:
-        print 'build'
-        # make_docker_file_rpmbuild(docker_file, docker_image)
-    #     # make_docker_file(docker_image)
-
-    #     # get spec file name
-    #     ls = os.listdir(".")
-    #     spec_file = filter(lambda x:'spec' in x, ls)
-
-    #     # search for sources
-    #     spec = open(spec_file[0], 'r').readlines()
-    #     sources = filter(lambda x:'Source' in x, spec)
-        
-    #     # search for BuildRequire
-    #     build_require = filter(lambda x:'BuildRequires' in x, spec)
-    #     required_rpm = build_require[0].split()
-
-    #     docker_lines = open('Dockerfile', 'r').readlines()
-        
-    #     # write on docker file
-    #     for i in range(len(sources)):
-    #         source_file = sources[i].split()
-    #         source_line = filter(lambda x:source_file[1] in x, docker_lines)
-    #         if source_line == []:
-    #             add_source_to_file(source_file[1])
-
-    #     for i in range(len(build_require)):
-    #         build_require_line = build_require[i].split()
-    #         add_build_require(build_require_line[1])
-                
-    #     spec_line = filter(lambda x:spec_file[0] in x, docker_lines)
-    #     if spec_line == []:
-    #         add_spec_to_file(spec_file[0]) # adiciona o nome do spec no Dockerfile
-
-    #     # build docker image    
-    #     os.system('docker build --tag="centos7:base_build" .')
-
-    #     # create container
-    #     container = docker.create_container(
-    #         image='centos7:base_build',
-    #         stdin_open=True,
-    #         tty=True,
-    #         command='/usr/bin/rpmbuild -ba /rpmbuild/SPECS/%s' % (spec_file[0],)
-    #     )
-    #     docker.start(container)
-    #     dockerpty.PseudoTerminal(docker, container).start()
-        
-    #     # copy rpm to local directory
-    #     docker_container = docker.containers(latest=True)
-    #     container_id = docker_container[0]['Id']
-    #     package_path = '/rpmbuild/RPMS'
-    #     os.system('docker cp %s:/rpmbuild/RPMS .' % (container_id,))
-    #     os.system('docker cp %s:/rpmbuild/SRPMS .' % (container_id,))
-
-    # # Test install: package-builder --test
-    # if args.test == True:
-    #     make_docker_file_test()
-    #     _ip = shellinit.strip().split(':')
-    #     ip = _ip[1].split('//')[1]
-    #     os.system('scp -r -i ~/.ssh/id_boot2docker RPMS SRPMS docker@%s:~/' % (ip,))
-    #     os.system('docker build --tag="centos7:test" ./test')
-    #     os.system('docker run -i -t -v /home/docker/RPMS:/RPMS -v /home/docker/SRPMS:/SRPMS centos7:test /bin/bash')
+        # make base docker file
+        make_docker_file_rpmbuild(args.image)
+        # append spec dependences to docker file
+        append_build_require_to_docker_file()
+        append_spec_file_to_docker_file()
+        append_source_to_docker_file()
+        # build docker image
+        os.system('docker build --tag="package-builder:base_build" .')
+        # create container
+        container = docker.create_container(
+            image='package-builder:base_build',
+            stdin_open=True,
+            tty=True,
+            command='/usr/bin/rpmbuild -ba /rpmbuild/SPECS/%s' % (get_spec_file_name(),)
+        )
+        docker.start(container)
+        dockerpty.PseudoTerminal(docker, container).start()
+        # copy rpm to local directory
+        docker_container = docker.containers(latest=True)
+        container_id = docker_container[0]['Id']
+        package_path = '/rpmbuild/RPMS'
+        os.system('docker cp %s:/rpmbuild/RPMS .' % (container_id,))
+        os.system('docker cp %s:/rpmbuild/SRPMS .' % (container_id,))
+    
+    # Test install: package-builder --test
+    if args.test == True:
+        make_docker_file_default(args.image)
+        os.system('scp -r -i ~/.ssh/id_boot2docker RPMS SRPMS docker@%s:~/' % (get_docker_ip(),))
+        os.system('docker build --tag="package-builder:base" ./test')
+        os.system('docker run -i -t -v /home/docker/RPMS:/RPMS -v /home/docker/SRPMS:/SRPMS package-builder:base /bin/bash')
 
 if __name__ == '__main__':
     main()

@@ -20,7 +20,8 @@ class TestPackageBuilder(unittest.TestCase):
     source_file_1 = 'file1.tar.gz'
     build_require_0 = 'golang'
     build_require_1 = 'git'
-
+    tcp_url_regex = r"^tcp://\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}:2375$"
+    ip_regex = r"^\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}$"
     def clean(self):
         "clean all"
         if os.path.exists('./test'):
@@ -49,7 +50,7 @@ class TestPackageBuilder(unittest.TestCase):
             s_file.writelines(lines)
     
     def make_docker_file(self):
-        package_builder.make_docker_file_rpmbuild(self.docker_file_rpmbuild, self.docker_image)
+        package_builder.make_docker_file_rpmbuild(self.docker_image)
 
     def tearDown(self):
         # self.clean()
@@ -85,10 +86,8 @@ class TestPackageBuilder(unittest.TestCase):
 
     def test_make_docker_file_rpmbuild(self):
         "test rpmbuild docker file content"
-        docker_file = "Dockerfile"
-        docker_image = "centos:centos7"
-        package_builder.make_docker_file_rpmbuild(docker_file, docker_image)
-        with open(docker_file, "r") as d_file:
+        package_builder.make_docker_file_rpmbuild(self.docker_image)
+        with open(self.docker_file_rpmbuild, "r") as d_file:
             read_file_lines = d_file.readlines()
         self.assertEqual(read_file_lines, self.docker_image_lines())
 
@@ -100,8 +99,8 @@ class TestPackageBuilder(unittest.TestCase):
         file_lines_read = file_lines[0]
         file_lines_list = []
         file_lines_list.insert(0, file_lines_read)
-        package_builder.make_docker_file_default(docker_file, docker_image)
-        with open(docker_file, "r") as d_file:
+        package_builder.make_docker_file_default(docker_image)
+        with open(self.docker_file_default, "r") as d_file:
             read_file_lines = d_file.readlines()
         self.assertEqual(read_file_lines, file_lines_list)
 
@@ -151,6 +150,25 @@ class TestPackageBuilder(unittest.TestCase):
             docker_file_lines = docker_lines.readlines()
         self.assertIn("ADD %s /rpmbuild/SOURCES/\n" % (package_builder.make_source_list()[0],), docker_file_lines)
         self.assertIn("ADD %s /rpmbuild/SOURCES/\n" % (package_builder.make_source_list()[1],), docker_file_lines)
+
+    def test_get_docker_host(self):
+        docker_host = package_builder.get_docker_host()
+        self.assertEqual(docker_host[0], 'export DOCKER_HOST')
+        self.assertRegexpMatches(docker_host[1], self.tcp_url_regex)
+    
+    def test_get_docker_url(self):
+        docker_url = package_builder.get_docker_url()
+        self.assertRegexpMatches(docker_url, self.tcp_url_regex)
+
+    def test_get_docker_ip(self):
+        docker_ip = package_builder.get_docker_ip()
+        self.assertRegexpMatches(docker_ip, self.ip_regex)
+
+    def test_install_docker(self):
+        pass
+
+    def test_main(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()
