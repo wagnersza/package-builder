@@ -20,8 +20,8 @@ class TestPackageBuilder(unittest.TestCase):
     source_file_1 = 'file1.tar.gz'
     build_require_0 = 'golang'
     build_require_1 = 'git'
-    tcp_url_regex = r"^tcp://\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}:2375$"
-    ip_regex = r"^\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}$"
+    tcp_url_regex = r"^tcp://\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}:2375$"
+    ip_regex = r"^\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}$"
     def clean(self):
         "clean all"
         if os.path.exists('./test'):
@@ -163,12 +163,6 @@ class TestPackageBuilder(unittest.TestCase):
     def test_get_docker_ip(self):
         docker_ip = package_builder.get_docker_ip()
         self.assertRegexpMatches(docker_ip, self.ip_regex)
-
-    def test_install_docker(self):
-        pass
-
-    def test_main(self):
-        pass
 
 if __name__ == '__main__':
     unittest.main()
