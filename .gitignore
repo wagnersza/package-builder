@@ -2,6 +2,7 @@
 *.rpm
 *.tar
 *.gz
+*.pyc
 dist
 MANIFEST
 package_builder.egg-info
