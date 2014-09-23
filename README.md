@@ -20,7 +20,7 @@ $ pip install git+https://github.com/wagnersza/package-builder
 Install and start a new boot2docker VM and prepares the package development environment
 
 ```bash
-$ package-builder --start
+$ package-builder --up
 ```
 
 ## Build packages
