@@ -19,7 +19,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'package-builder = package_builder:main',
+            'package-builder = package_builder.package_builder:main',
         ],
     }
 )
