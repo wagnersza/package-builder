@@ -1,3 +1,4 @@
+[![Stories in Ready](https://badge.waffle.io/wagnersza/package-builder.png?label=ready&title=Ready)](https://waffle.io/wagnersza/package-builder)
 # package-builder
 
 Builds OS packages inside a docker container. A Dockerfile and build context are dynamically  
