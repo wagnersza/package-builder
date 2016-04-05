@@ -1,3 +1,4 @@
-argparse==1.2.1
-docker-py==0.5.0
-dockerpty==0.2.3
+argparse
+docker-py
+dockerpty
+docker
