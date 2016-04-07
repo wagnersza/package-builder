@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
 import docker as docker_client
@@ -81,28 +81,27 @@ def append_source_to_docker_file():
             d_file.writelines(file_line)
 
 def get_docker_host():
-    shellinit = os.popen("boot2docker shellinit").read()
-    return shellinit.strip().split("=")
-
-def get_docker_url():
-    docker_url = get_docker_host()
-    return docker_url[1]
+    #shellinit = os.popen("docker-machine env | grep DOCKER_HOST | sed 's/export //g' | sed 's/\"//g'").read()
+    shellinit = os.popen("docker-machine url").read()
+    return shellinit.strip()
 
 def get_docker_ip():
-    docker_ip = get_docker_url()
-    return docker_ip.split("//")[1].split(":")[0]
+    #shellinit = os.popen("docker-machine env | grep DOCKER_HOST | sed 's/export //g' | sed 's/\"//g'").read()
+    shellinit = os.popen("docker-machine ip").read()
+    return shellinit.strip()
 
 def install_docker():
     # print platform.system()
     if platform.system() == 'Darwin':
-        print '\n - instaling boot2docker ...\n'
-        os.system("brew install boot2docker")
-        print '\n - starting boot2docker ...\n'
-        os.system("boot2docker init")
-        os.system("boot2docker up")
+        print '\n - instaling docker-machine ...\n'
+        if os.system("brew cask list dockertoolbox") != 0:
+            os.system("brew update") 
+            os.system("brew install Caskroom/cask/dockertoolbox") # Ele gerou um erro de ruby. So resolvi atualizando o brew acima
+        print '\n - starting docker-machine...\n'
+        os.system("docker-machine start default")
         print '\n - setting DOCKER_HOST env variable ...\n'
         docker_host = get_docker_host()
-        os.putenv('DOCKER_HOST', docker_host[1]); os.system('bash')
+        os.environ['DOCKER_HOST'] = docker_host#; os.system('bash')
     else:
         print "system not suported yet"
 
@@ -121,7 +120,7 @@ def main():
     args = parser.parse_args()
 
     # docker
-    docker = docker_client.Client(base_url=get_docker_url(),timeout=3000)
+    docker = docker_client.Client(base_url=get_docker_host(),timeout=3000)
 
     # Start: package-builder --up
     if args.up == True:
