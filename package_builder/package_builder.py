@@ -5,10 +5,11 @@ import docker as docker_client
 import os
 import argparse
 import subprocess
+from   subprocess import Popen, PIPE
 import sys
 import dockerpty
 import platform
-from io import BytesIO
+from   io import BytesIO
 import tarfile
 import StringIO
 
@@ -24,16 +25,6 @@ def file_lines(docker_image):
         'RUN rpmdev-setuptree\n',
     ]    
     return lines
-
-#def make_docker_file_default(docker_image):
-#    test_dir = './test'
-#    if not os.path.exists(test_dir):
-#        os.makedirs(test_dir)
-#    
-#    file_lines_read = file_lines(docker_image)
-#    file_lines_list = file_lines_read[0]
-#    with open("./test/Dockerfile", 'w') as d_file:
-#        d_file.writelines(file_lines_list)
 
 def get_spec_file_name():
     ls = os.listdir("./rpmbuild/SPECS")
@@ -65,31 +56,15 @@ def make_source_list():
         source_list.append(source_file)
     return source_list
 
-#def append_spec_file_to_docker_file(dockerfile):
-#    file_line = "COPY %s /rpmbuild/SPECS/\n" % (get_spec_file_name())
-#    #file_line = ""
-#    dockerfile.append(file_line)
-#    return dockerfile
-
 def append_build_require_to_docker_file(dockerfile):
     for i in make_build_require_list():
         file_line = "RUN yum install -y %s\n" % (i,)
         dockerfile.append(file_line)
     return dockerfile
 
-#def append_source_to_docker_file(dockerfile):
-#    for i in make_source_list():
-#        file_line = "ADD %s /rpmbuild/SOURCES/\n" % (i,)
-#        dockerfile.append(file_line)
-#    return dockerfile
-
 def get_docker_host():
-    shellinit = os.popen("docker-machine url").read()
+    shellinit = os.popen("docker-machine url package-builder").read()
     return shellinit.strip()
-
-#def get_docker_ip():
-#    shellinit = os.popen("docker-machine ip").read()
-#    return shellinit.strip()
 
 def install_docker():
     if platform.system() == 'Darwin':
@@ -97,18 +72,23 @@ def install_docker():
         if os.system("brew cask list dockertoolbox") != 0:
             os.system("brew update") # It had raised an ruby error so I had to update brew first
             os.system("brew install Caskroom/cask/dockertoolbox") 
-        print '\n - starting docker-machine...\n'
-        os.system("docker-machine start default")
     else:
         print "system not suported yet"
 
+def start_docker():
+    print '\n - starting docker-machine...\n'
+    os.system("docker-machine start package-builder")
+
+def create_machine_docker():
+    print '\n - creating a new vm called package-builder on docker-machine...\n'
+    os.system("docker-machine create --driver virtualbox package-builder")
+    
 def remove_existing_docker_images(client):
     print '\n - removing existing docker images with package-builder:base_build... \n'
     if len(client.images("package-builder:base_build")) != 0:
         client.remove_image("package-builder:base_build", force=True)
     else:
         print '\n - no docker images with name package-builder:base_build found to remove... \n'    
-
 
 def remove_existing_docker_containers(client):
     print '\n - removing existing docker containers with package-builder name... \n'
@@ -127,7 +107,6 @@ def create_docker_container(client):
         tty=True,
         detach=False,
         command='/bin/bash'
-        #command='/usr/bin/rpmbuild -ba /root/rpmbuild/SPECS/%s' % get_spec_file_name()
     )
     return container
 
@@ -172,6 +151,33 @@ def get_rpm_from_container(client,container):
     tf = tarfile.open(fileobj=file_content)
     return tf
 
+def check_dockermachine_exists_and_running():
+    # Verifies that docker-machine is installed
+    cmd = ['/usr/local/bin/docker-machine']
+    FNULL = open(os.devnull, 'w')
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        install_docker()
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
+        sys.exit(1)
+    print "Everything is all right" 
+
+    # Verifies that the vm docker called package-builder exists
+    cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder'] 
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        create_machine_docker()
+
+    # Verifies that the vm docker is running
+    stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
+
+    if stdout.strip() != 'Running':
+        start_docker()
+    else:
+        print '\n - docker-machine package-builder is already running... \n'
+
 def main():
     parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
     parser.add_argument("-u", "--up", action="store_true", help="install and start local enviroment")
@@ -191,10 +197,13 @@ def main():
 
     # Start: package-builder --up
     if args.up == True:
-        install_docker()
+        check_dockermachine_exists_and_running()
     
     # Build: packege-builder --build
     if args.build == True:
+
+        check_dockermachine_exists_and_running()
+
         # create a client to connect to docker-machine and use docker to manage containers
         client = docker.from_env(assert_hostname=False)
         
@@ -295,7 +304,6 @@ def main():
 
 	print '\n - now execute the following command: eval $(docker-machine env); docker exec -it package-builder /bin/bash\n'
 	print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
-
 
 if __name__ == '__main__':
     main()
