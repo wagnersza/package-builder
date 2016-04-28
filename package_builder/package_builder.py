@@ -5,10 +5,11 @@ import docker as docker_client
 import os
 import argparse
 import subprocess
+from   subprocess import Popen, PIPE
 import sys
 import dockerpty
 import platform
-from io import BytesIO
+from   io import BytesIO
 import tarfile
 import StringIO
 
@@ -24,21 +25,6 @@ def file_lines(docker_image):
         'RUN rpmdev-setuptree\n',
     ]    
     return lines
-
-#def make_docker_file_rpmbuild(docker_image):
-#    file_lines_read = file_lines(docker_image)
-#    with open("Dockerfile", 'w') as d_file:
-#        d_file.writelines(file_lines_read)
-        
-def make_docker_file_default(docker_image):
-    test_dir = './test'
-    if not os.path.exists(test_dir):
-        os.makedirs(test_dir)
-    
-    file_lines_read = file_lines(docker_image)
-    file_lines_list = file_lines_read[0]
-    with open("./test/Dockerfile", 'w') as d_file:
-        d_file.writelines(file_lines_list)
 
 def get_spec_file_name():
     ls = os.listdir("./rpmbuild/SPECS")
@@ -70,59 +56,127 @@ def make_source_list():
         source_list.append(source_file)
     return source_list
 
-#def spec_file_line():
-#    file_line = "COPY %s /rpmbuild/SPECS/\n" % (get_spec_file_name(),)
-#    return file_line
-
-def append_spec_file_to_docker_file(dockerfile):
-    file_line = "COPY %s /rpmbuild/SPECS/\n" % (get_spec_file_name())
-    #file_line = ""
-    dockerfile.append(file_line)
-    return dockerfile
-#    with open('Dockerfile', 'a') as d_file:
-#        spec_file = d_file.writelines(spec_file_line())
-
 def append_build_require_to_docker_file(dockerfile):
     for i in make_build_require_list():
         file_line = "RUN yum install -y %s\n" % (i,)
-        #with open('Dockerfile', 'a') as d_file:
-        #    d_file.writelines(file_line)
         dockerfile.append(file_line)
     return dockerfile
-
-def append_source_to_docker_file(dockerfile):
-    for i in make_source_list():
-        file_line = "ADD %s /rpmbuild/SOURCES/\n" % (i,)
-        dockerfile.append(file_line)
-    return dockerfile
-#        with open('Dockerfile', 'a') as d_file:
-#            d_file.writelines(file_line)
 
 def get_docker_host():
-    #shellinit = os.popen("docker-machine env | grep DOCKER_HOST | sed 's/export //g' | sed 's/\"//g'").read()
-    shellinit = os.popen("docker-machine url").read()
-    return shellinit.strip()
-
-def get_docker_ip():
-    #shellinit = os.popen("docker-machine env | grep DOCKER_HOST | sed 's/export //g' | sed 's/\"//g'").read()
-    shellinit = os.popen("docker-machine ip").read()
+    shellinit = os.popen("docker-machine url package-builder").read()
     return shellinit.strip()
 
 def install_docker():
-    # print platform.system()
     if platform.system() == 'Darwin':
         print '\n - instaling docker-machine ...\n'
         if os.system("brew cask list dockertoolbox") != 0:
             os.system("brew update") # It had raised an ruby error so I had to update brew first
             os.system("brew install Caskroom/cask/dockertoolbox") 
-        print '\n - starting docker-machine...\n'
-        os.system("docker-machine start default")
-#        print '\n - setting DOCKER_HOST env variable ...\n'
-#        docker_host = get_docker_host()
-#        os.environ['DOCKER_HOST'] = docker_host#; os.system('bash')
     else:
         print "system not suported yet"
 
+def start_docker():
+    print '\n - starting docker-machine...\n'
+    os.system("docker-machine start package-builder")
+
+def create_machine_docker():
+    print '\n - creating a new vm called package-builder on docker-machine...\n'
+    os.system("docker-machine create --driver virtualbox package-builder")
+    
+def remove_existing_docker_images(client):
+    print '\n - removing existing docker images with package-builder:base_build... \n'
+    if len(client.images("package-builder:base_build")) != 0:
+        client.remove_image("package-builder:base_build", force=True)
+    else:
+        print '\n - no docker images with name package-builder:base_build found to remove... \n'    
+
+def remove_existing_docker_containers(client):
+    print '\n - removing existing docker containers with package-builder name... \n'
+    containers_to_remove = client.containers(all=True, filters={'Names': 'package-builder'})
+    if len(containers_to_remove) != 0:
+        client.remove_container(containers_to_remove[0]['Id'],force=True)
+    else:
+        print '\n - no containers with name package-builder found to remove... \n'
+
+def create_docker_container(client):
+    print '\n - creating a new docker container as package-builder... \n'
+    container = client.create_container(
+        name='package-builder',
+        image='package-builder:base_build',
+        stdin_open=True,
+        tty=True,
+        detach=False,
+        command='/bin/bash'
+    )
+    return container
+
+def create_docker_image(client,file):
+    print '\n - creating a new docker image as package-builder:base_build based on this Dockerfiler: \n'
+    response = [line for line in client.build(
+        fileobj=file,
+        rm=True,
+        tag='package-builder:base_build')
+    ]
+    return response
+
+def transfer_tar_to_container(client,container,filedata,path):
+    print '\n - transfering the tarfile to the container ... \n'
+    client.put_archive(container=str(container['Id']), path=path, data=filedata )
+
+def create_rpmbuild_tar(client, container):
+    print '\n - creating a tarfile of rpmbuild folder to transfer it to the container... \n'
+    make_tarfile("rpmbuild.tar", "rpmbuild")
+    f = open('rpmbuild.tar', 'rb')
+    return f.read()
+
+def create_rpms_tar(client, container):
+    print '\n - creating a tarfile of rpm files to transfer it to the container... \n'
+    make_tarfile("rpms.tar", "rpmbuild/RPMS")
+    f = open('rpms.tar', 'rb')
+    return f.read()
+
+def remove_rpmbuild_tar(tarfile):
+    print '\n - removing tarfile... \n'
+    os.remove(tarfile)
+
+def build_rpm(client,container):
+    print '\n - building the rpm... \n'
+    container_exec = client.exec_create(container=str(container['Id']), cmd='/bin/bash -c "/usr/bin/rpmbuild -ba /root/%s"' % get_spec_file_name(), stdout=True, stderr=True, tty=True)
+    return container_exec
+
+def get_rpm_from_container(client,container):
+    print '\n - getting srpm and rpm from the container... \n'
+    stream, stats = client.get_archive(container=str(container['Id']), path='/root/rpmbuild')
+    file_content = StringIO.StringIO(stream.read())
+    tf = tarfile.open(fileobj=file_content)
+    return tf
+
+def check_dockermachine_exists_and_running():
+    # Verifies that docker-machine is installed
+    cmd = ['/usr/local/bin/docker-machine']
+    FNULL = open(os.devnull, 'w')
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        install_docker()
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
+        sys.exit(1)
+    print "Everything is all right" 
+
+    # Verifies that the vm docker called package-builder exists
+    cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder'] 
+    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+    if returncode != 0:
+        create_machine_docker()
+
+    # Verifies that the vm docker is running
+    stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
+
+    if stdout.strip() != 'Running':
+        start_docker()
+    else:
+        print '\n - docker-machine package-builder is already running... \n'
 
 def main():
     parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
@@ -130,6 +184,7 @@ def main():
     parser.add_argument("-b", "--build", action="store_true", help="build OS package")
     parser.add_argument("-t", "--test", action="store_true", help="start shell with a clean container and copy package to test it") 
     parser.add_argument("-i", "--image", default='centos:centos7', help="docker image, default: centos:centos7, see the options in https://registry.hub.docker.com") 
+    parser.add_argument("-d", "--debug", action="store_true", help='print more logs') 
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -142,141 +197,113 @@ def main():
 
     # Start: package-builder --up
     if args.up == True:
-        install_docker()
+        check_dockermachine_exists_and_running()
     
     # Build: packege-builder --build
     if args.build == True:
+
+        check_dockermachine_exists_and_running()
+
         # create a client to connect to docker-machine and use docker to manage containers
-        #os.system("docker-machine env")
         client = docker.from_env(assert_hostname=False)
         
         # make base docker file
-        #make_docker_file_rpmbuild(args.image)
         dockerfile_arr = file_lines(args.image)
 
         # append spec dependences to docker file
         dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr)
-        #dockerfile_arr = append_spec_file_to_docker_file(dockerfile_arr)
-        # We have to copy SPEC file to container
-        #dockerfile_arr = append_source_to_docker_file(dockerfile_arr)
-        # build docker image
 
-        #print dockerfile_arr
-        #print dockerfile_arr
-        dockerfile = "".join(dockerfile_arr)
-        #print dockerfile
-        f = BytesIO(dockerfile.encode('utf-8'))
-        #print f
-        client = docker.from_env(assert_hostname=False)
         # remove image before creating it
-        print '\n - removing existing docker images with package-builder:base_build... \n'
-        if len(client.images("package-builder:base_build")) != 0:
-            client.remove_image("package-builder:base_build", force=True)
-        else:
-            print '\n - no docker images with name package-builder:base_build found to remove... \n'
+        remove_existing_docker_images(client)
+
+        # preparing the dockerfile as string to be passed to the container as POST
+        dockerfile = "".join(dockerfile_arr)
+        file = BytesIO(dockerfile.encode('utf-8'))
 
         # create an image with docker filer
-        print '\n - creating a new docker image as package-builder:base_build based on this Dockerfiler: \n'
-        print dockerfile
-        response = [line for line in client.build(
-            fileobj=f,
-            rm=True,
-            tag='package-builder:base_build')
-    #        custom_context=True,
-    #        path=os.getcwd())
-        ]
-	#print response
-        #print client.images()
+        create_docker_image(client,file)
         
         # removing the container first.
-        print '\n - removing existing docker containers with package-builder name... \n'
-        containers_to_remove = client.containers(all=True, filters={'Names': 'package-builder'})
-        if len(containers_to_remove) != 0:
-            client.remove_container(containers_to_remove[0]['Id'],force=True)
-        else:
-            print '\n - no containers with name package-builder found to remove... \n'
+        remove_existing_docker_containers(client)
 
-        # Creating a container 
-        print '\n - creating a new docker container as package-builder... \n'
-        container = client.create_container(
-            name='package-builder',
-            image='package-builder:base_build',
-            stdin_open=True,
-            tty=True,
-            detach=False,
-            command='bash'
-            #command='/usr/bin/rpmbuild -ba /root/rpmbuild/SPECS/%s' % get_spec_file_name()
-        )
+        # creating a container 
+        container=create_docker_container(client)
  
+        # start the container
         print '\n - starting container... \n'
         client.start(container)
 
         # create a tarfile for rpmbuild because the docker api only accepts tar files =/
-        print '\n - creating a tarfile of rpmbuild folder to transfer it to the container... \n'
-        make_tarfile("rpmbuild.tar", "rpmbuild")
+        filedata = create_rpmbuild_tar(client,container)
 
-        f = open('rpmbuild.tar', 'rb')
-        filedata = f.read()
-        print '\n - transfering the tarfile to the container ... \n'
-        client.put_archive(container=str(container['Id']), path='/root/', data=filedata )
-        print '\n - removing tarfile... \n'
-        os.remove("rpmbuild.tar")
+        # transfer the rpmbuild tar to the container
+        transfer_tar_to_container(client,container,filedata,'/root/')
+
+        # remover rpmbuild tar
+        remove_rpmbuild_tar("rpmbuild.tar")
 
         # we have to create a new instance of client because it raises a "Hijack is incompatible with use of CloseNotifier"
         client2 = docker.from_env(assert_hostname=False)
         
         # get the id of the execution and realizes it
-	print '\n - building the rpm... \n'
-        container_exec = client2.exec_create(container=str(container['Id']), cmd='/bin/bash -c "/usr/bin/rpmbuild -ba /root/%s; find /root/rpmbuild/"' % get_spec_file_name(), stdout=True, stderr=True, tty=True)
+        container_exec = build_rpm(client2,container)
 
         # start and print the execution of a command inside the running container
-        print client2.exec_start(exec_id=container_exec['Id'])
-	
-	print '\n - getting srpm and rpm from the container... \n'
-	stream, stats = client2.get_archive(container=str(container['Id']), path='/root/rpmbuild')
+        rpmbuild_log = client2.exec_start(exec_id=container_exec['Id'])
 
-	file_content = StringIO.StringIO(stream.read())
-	tf = tarfile.open(fileobj=file_content)
-	#tf.extractall(path='rpmbuild_compiled/')
+        # print more logs if debug is passed as parameter
+	if args.build == True:
+	    print rpmbuild_log
+	
+        # get the tar file of the rpm and srpm from container
+        tf = get_rpm_from_container(client2,container)
+
+        # extract the tarfile of the folder generated with the rpm and srpm
 	tf.extractall()
 
 	print '\n - build complete! \n'
 
-        #client.logs('package-builder', stdout=True, stderr=True)
-        # theres a bug on docker and we need a new client
-        #client = docker.from_env(assert_hostname=False)
-        #dockerpty.start(client, container)
-        #out_stream = client.attach(container=container, stdout=True, stderr=True, stream=True)
- 
-        #print out_stream
-        
-        #docker_container = client.containers(latest=True)
-        #print docker_container
- 
-
-        #os.system('docker build --tag="package-builder:base_build" .')
-        ## create container
-        #container = docker.create_container(
-        #    image='package-builder:base_build',
-        #    stdin_open=True,
-        #    tty=True,
-        #    command='/usr/bin/rpmbuild -ba /rpmbuild/SPECS/%s' % (get_spec_file_name(),)
-        #)
-        #docker.start(container)
-        #dockerpty.PseudoTerminal(docker, container).start()
-        ## copy rpm to local directory
-        #docker_container = docker.containers(latest=True)
-        #container_id = docker_container[0]['Id']
-        #package_path = '/rpmbuild/RPMS'
-        #os.system('docker cp %s:/rpmbuild/RPMS .' % (container_id,))
-        #os.system('docker cp %s:/rpmbuild/SRPMS .' % (container_id,))
-    
     # Test install: package-builder --test
     if args.test == True:
-        make_docker_file_default(args.image)
-        os.system('scp -r -i ~/.ssh/id_boot2docker RPMS SRPMS docker@%s:~/' % (get_docker_ip(),))
-        os.system('docker build --tag="package-builder:base" ./test')
-        os.system('docker run -i -t -v /home/docker/RPMS:/RPMS -v /home/docker/SRPMS:/SRPMS package-builder:base /bin/bash')
+        # create a client to connect to docker-machine and use docker to manage containers
+        client = docker.from_env(assert_hostname=False)
+
+        # make base docker file
+        dockerfile_arr = file_lines(args.image)
+
+        # append spec dependences to docker file
+        dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr)
+
+        # remove image before creating it
+        remove_existing_docker_images(client)
+
+        # preparing the dockerfile as string to be passed to the container as POST
+        dockerfile = "".join(dockerfile_arr)
+        file = BytesIO(dockerfile.encode('utf-8'))
+
+        # create an image with docker filer
+        create_docker_image(client,file)
+
+        # removing the container first.
+        remove_existing_docker_containers(client)
+
+        # creating a container
+        container=create_docker_container(client)
+
+        # start the container
+        print '\n - starting container... \n'
+        client.start(container)
+
+        # create a tarfile for rpmbuild because the docker api only accepts tar files =/
+        filedata = create_rpms_tar(client, container)
+
+        transfer_tar_to_container(client,container,filedata,'/root/rpmbuild/')
+
+        # remover rpmbuild tar
+        remove_rpmbuild_tar("rpms.tar")
+
+	print '\n - now execute the following command: eval $(docker-machine env); docker exec -it package-builder /bin/bash\n'
+	print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
 
 if __name__ == '__main__':
     main()
