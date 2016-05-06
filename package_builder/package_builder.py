@@ -50,6 +50,7 @@ def make_tarfile(output_filename, source_dir):
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
 def file_lines(docker_image):
+    print '\n - using docker image: %s... \n' % docker_image
     lines = [        
         "FROM %s\n" % (docker_image),
         'RUN yum install rpmdevtools wget -y\n',
