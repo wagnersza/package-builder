@@ -31,6 +31,8 @@ def get_source(args):
         source_file = args.source
         if os.path.isfile(source_file) == False:
             raise ValueError("The source file %s wasnt found" % source_file)
+	else:
+	    print '\n - using source file %s\n' % source_file
     else:
         source_file = ''
         source_dir = "./package_builder_tmp/rpmbuild/SOURCES"
@@ -38,9 +40,9 @@ def get_source(args):
         spec_file_name = filter(lambda x:'tar.gz' in x, ls)
         if len(spec_file_name) == 0:
             raise ValueError("No source file was found on: %s" % source_dir)
-        print '\n - using source dir: %s... \n' % source_dir
-
-    print '\n - using source file(s) inside ./package_builder_tmp/rpmbuild/SOURCES/ \n'
+	else:
+	    source_file = "./package_builder_tmp/rpmbuild/SOURCES/%s" % spec_file_name[0]
+            print '\n - using source file: %s... \n' % source_file
     return source_file
 
 def make_tarfile(output_filename, source_dir):
