@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import time
 import yum
 import shutil
 import docker as docker_client
@@ -116,10 +117,33 @@ def check_system():
 
 def install_docker(system):
     if system == 'mac':
-        print '\n - instaling docker-machine ...\n'
-        if os.system("brew cask list dockertoolbox") != 0:
-            os.system("brew update") # It had raised an ruby error so I had to update brew first
-            os.system("brew install Caskroom/cask/dockertoolbox") 
+        # Verifies that docker-machine is installed
+        cmd = ['/usr/local/bin/docker-machine']
+        FNULL = open(os.devnull, 'w')
+        returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+        if returncode != 0:
+            print '\n - instaling docker-machine ...\n'
+            if os.system("brew cask list dockertoolbox") != 0:
+                os.system("brew update") # It had raised an ruby error so I had to update brew first
+                os.system("brew install Caskroom/cask/dockertoolbox") 
+        returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+        if returncode != 0:
+            print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
+            sys.exit(1)
+    
+        # Verifies that the docker vm called package-builder exists
+        cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder']
+        returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+        if returncode != 0:
+            create_machine_docker()
+    
+        # Verifies that the vm docker is running
+        stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
+    
+        if stdout.strip() != 'Running':
+            start_docker()
+        else:
+            print '\n - docker-machine package-builder is already running... \n'
     elif system == 'linux':
         yb = yum.YumBase()
         if yb.rpmdb.searchNevra(name='docker-engine'):
@@ -128,14 +152,27 @@ def install_docker(system):
             if returncode != 0:
                 print ('\n - docker is not running...\n')
                 print ('\n - starting docker daemon on 0.0.0.0:2375\n')
-                os.system("nohup docker daemon -H tcp://0.0.0.0:2375 &")
+                os.system("docker daemon -H tcp://0.0.0.0:2375 > /dev/null &")
             else:
                 print ('\n - docker is running...\n')
         else:
             print ('\n - docker is not installed...\n')
-            os.system("yum install docker-engine -y")
-            print ('\n - starting docker daemon on 0.0.0.0:2375\n')
-            os.system("nohup docker daemon -H tcp://0.0.0.0:2375 &")
+            returncode = os.system("yum install docker-engine -y")
+            if returncode != 0:
+                print ('failed to install docker-engine. Please check the errors above')
+                print ('Maybe you have to add docker yum repo first:')
+                print ("sudo tee /etc/yum.repos.d/docker.repo <<-'EOF'")
+                print ("[dockerrepo]")
+                print ("name=Docker Repository")
+                print ("baseurl=https://yum.dockerproject.org/repo/main/centos/$releasever/")
+                print ("enabled=1")
+                print ("gpgcheck=1")
+                print ("gpgkey=https://yum.dockerproject.org/gpg")
+                print ("EOF")
+                sys.exit(1) 
+            else:
+                print ('\n - starting docker daemon on 0.0.0.0:2375\n')
+                os.system("nohup docker daemon -H tcp://0.0.0.0:2375 &")
     else:
         raise ValueError("system not suported yet")
 
@@ -230,31 +267,45 @@ def get_rpm_from_container(client,container):
     tf = tarfile.open(fileobj=file_content)
     return tf
 
-def check_dockermachine_exists_and_running(system):
-    # Verifies that docker-machine is installed
-    cmd = ['/usr/local/bin/docker-machine']
-    FNULL = open(os.devnull, 'w')
-    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-    if returncode != 0:
-        install_docker(system)
-    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-    if returncode != 0:
-        print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
-        sys.exit(1)
+def connect_docker(docker_client,system):
+    tries = 0
+    while tries < 3:
+        try:
+            docker = docker_client.Client(base_url=get_docker_host(system),timeout=3000,version='auto')
+            break
+        except Exception as e:
+            print '\n - docker isnt running yet. Waiting... \n'
+            time.sleep(1)
+            tries += 1
+    if tries == 3:
+        raise ValueError("Could not verify that docker is running")
+    return docker
 
-    # Verifies that the docker vm called package-builder exists
-    cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder'] 
-    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-    if returncode != 0:
-        create_machine_docker()
-
-    # Verifies that the vm docker is running
-    stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
-
-    if stdout.strip() != 'Running':
-        start_docker()
-    else:
-        print '\n - docker-machine package-builder is already running... \n'
+#def check_dockermachine_exists_and_running(system):
+#    # Verifies that docker-machine is installed
+#    cmd = ['/usr/local/bin/docker-machine']
+#    FNULL = open(os.devnull, 'w')
+#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+#    if returncode != 0:
+#        install_docker(system)
+#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+#    if returncode != 0:
+#        print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
+#        sys.exit(1)
+#
+#    # Verifies that the docker vm called package-builder exists
+#    cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder'] 
+#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
+#    if returncode != 0:
+#        create_machine_docker()
+#
+#    # Verifies that the vm docker is running
+#    stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
+#
+#    if stdout.strip() != 'Running':
+#        start_docker()
+#    else:
+#        print '\n - docker-machine package-builder is already running... \n'
 
 def main():
     parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
@@ -270,6 +321,9 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    # Without this we cant connect to docker via python even if the pass the base_url=HOST. Bizarre
+    os.environ['DOCKER_HOST']='tcp://0.0.0.0:2375'
+
     args = parser.parse_args()
     system = check_system()
     # Start: package-builder --up
@@ -281,13 +335,10 @@ def main():
     
     # Build: packege-builder --build
     if args.build == True:
-        if system == 'mac':
-            # verify that docker-machine exists and it is running
-            check_dockermachine_exists_and_running(system)
-        else:
-            install_docker(system)
+        # verify that docker-machine for mac or docker-engine for linux exists and it is running
+        install_docker(system)
         # docker
-        docker = docker_client.Client(base_url=get_docker_host(system),timeout=3000,version='auto')
+        docker = connect_docker(docker_client,system)
         # Set spec and source files
         spec_file = get_spec(args)
         source_file = get_source(args)
@@ -299,6 +350,7 @@ def main():
         dockerfile_arr = file_lines(args.image)
         # append spec dependences to docker file
         dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr, spec_file)
+        print(dockerfile_arr)
         # remove image before creating it
         remove_existing_docker_images(client)
         # preparing the dockerfile as string to be passed to the container as POST
@@ -336,10 +388,10 @@ def main():
 
     # Test install: package-builder --test
     if args.test == True:
-        # verify that docker-machine exists and it is running
-        check_dockermachine_exists_and_running(system)
+        # verify that docker-machine for mac or docker-engine for linux exists and it is running
+        install_docker(system)
         # docker
-        docker = docker_client.Client(base_url=get_docker_host(system),timeout=3000,version='auto')
+        docker = connect_docker(docker_client,system)
         # Set spec and source files 
         spec_file = get_spec(args)
         source_file = get_source(args)
@@ -370,7 +422,12 @@ def main():
         # remover rpmbuild tar
         remove_rpmbuild_tar("rpms.tar")
 
-	print '\n - now execute the following command: eval $(docker-machine env package-builder); docker exec -it package-builder /bin/bash\n'
+        if system == 'mac':
+            print '\n - now execute the following command: export DOCKER_HOST="tcp://0.0.0.0:2375"; eval $(docker-machine env package-builder); docker exec -it package-builder /bin/bash\n'
+        elif system == 'linux':
+            print '\n - now execute the following command: export DOCKER_HOST="tcp://0.0.0.0:2375"; docker exec -it package-builder /bin/bash\n'
+        else:
+            raise ValueError("system not suported yet")
 	print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
 
 if __name__ == '__main__':
