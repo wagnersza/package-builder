@@ -17,33 +17,33 @@ from   io import BytesIO
 import tarfile
 import StringIO
 
-def get_spec(args):
-    if args.spec != '':
-        spec_file = args.spec
+def get_spec(args_spec,pb_tmp_dir):
+    if args_spec != '':
+        spec_file = args_spec
     else:
-        spec_file = './package_builder_tmp/rpmbuild/SPECS/spec'
+        spec_file = './%s/rpmbuild/SPECS/spec' % pb_tmp_dir
     if os.path.isfile(spec_file) == False:
         raise ValueError("The spec file %s wasnt found" % spec_file)
     else:
         print '\n - using spec file: %s... \n' % spec_file
     return spec_file
 
-def get_source(args):
-    if args.source != '':
-        source_file = args.source
+def get_source(args_source,pb_tmp_dir):
+    if args_source != '':
+        source_file = args_source
         if os.path.isfile(source_file) == False:
             raise ValueError("The source file %s wasnt found" % source_file)
 	else:
 	    print '\n - using source file %s\n' % source_file
     else:
         source_file = ''
-        source_dir = "./package_builder_tmp/rpmbuild/SOURCES"
+        source_dir = "./%s/rpmbuild/SOURCES" % pb_tmp_dir
         ls = os.listdir(source_dir)
         spec_file_name = filter(lambda x:'tar.gz' in x, ls)
         if len(spec_file_name) == 0:
             raise ValueError("No source file was found on: %s" % source_dir)
 	else:
-	    source_file = "./package_builder_tmp/rpmbuild/SOURCES/%s" % spec_file_name[0]
+	    source_file = "./%s/rpmbuild/SOURCES/%s" % (pb_tmp_dir,spec_file_name[0])
             print '\n - using source file: %s... \n' % source_file
     return source_file
 
@@ -61,8 +61,8 @@ def file_lines(docker_image):
     ]    
     return lines
 
-def get_spec_file_name():
-    ls = os.listdir("./package_builder_tmp/rpmbuild/SPECS")
+def get_spec_file_name(pb_tmp_dir):
+    ls = os.listdir("./%s/rpmbuild/SPECS" % pb_tmp_dir)
     spec_file_name = filter(lambda x:'spec' in x, ls)
     if len(spec_file_name) == 0:
         raise ValueError("No spec file was found on: %s" % os.getcwd())
@@ -151,7 +151,7 @@ def install_docker(system):
             returncode = os.system("pgrep docker > /dev/null")
             if returncode != 0:
                 print ('\n - docker is not running...\n')
-                print ('\n - starting docker daemon on 0.0.0.0:2375\n')
+                print ('\n - starting docker daemon on tcp://0.0.0.0:2375\n')
                 os.system("docker daemon -H tcp://0.0.0.0:2375 > /dev/null &")
             else:
                 print ('\n - docker is running...\n')
@@ -225,10 +225,10 @@ def transfer_tar_to_container(client,container,filedata,path):
     print '\n - transfering the tarfile to the container ... \n'
     client.put_archive(container=str(container['Id']), path=path, data=filedata )
 
-def create_rpmbuild_tar(client, container, spec_file, source_file):
+def create_rpmbuild_tar(client, container, spec_file, source_file, pb_tmp_dir):
     print '\n - creating a tarfile of rpmbuild folder to transfer it to the container... \n'
-    spec_dir='package_builder_tmp/rpmbuild/SPECS'
-    source_dir='package_builder_tmp/rpmbuild/SOURCES'
+    spec_dir='%s/rpmbuild/SPECS' % pb_tmp_dir
+    source_dir='%s/rpmbuild/SOURCES' % pb_tmp_dir
     if not os.path.exists(spec_dir):
         os.makedirs(spec_dir)
     shutil.copy2(spec_file, spec_dir)
@@ -236,13 +236,13 @@ def create_rpmbuild_tar(client, container, spec_file, source_file):
         os.makedirs(source_dir)
     if source_file != '':
         shutil.copy2(source_file, source_dir)
-    make_tarfile("rpmbuild.tar", "package_builder_tmp/rpmbuild")
+    make_tarfile("rpmbuild.tar", "%s/rpmbuild" % pb_tmp_dir)
     f = open('rpmbuild.tar', 'rb')
     return f.read()
 
-def create_rpms_tar(client, container):
+def create_rpms_tar(client, container, pb_tmp_dir):
     print '\n - creating a tarfile of rpm files to transfer it to the container... \n'
-    make_tarfile("rpms.tar", "package_builder_tmp/rpmbuild/RPMS")
+    make_tarfile("rpms.tar", "%s/rpmbuild/RPMS" % pb_tmp_dir)
     f = open('rpms.tar', 'rb')
     return f.read()
 
@@ -251,13 +251,13 @@ def remove_rpmbuild_tar(tarfile):
     os.remove(tarfile)
 
 def remove_rpmbuild_dir(rpmbuilddir):
-    print '\n - removing rpmbuilddir ./package_builder_tmp \n'
+    print '\n - removing rpmbuilddir %s \n' % rpmbuilddir
     if os.path.exists(rpmbuilddir):
          shutil.rmtree(rpmbuilddir)
 
-def build_rpm(client,container):
+def build_rpm(client,container,pb_tmp_dir):
     print '\n - building the rpm... \n'
-    container_exec = client.exec_create(container=str(container['Id']), cmd='/bin/bash -c "/usr/bin/rpmbuild -ba /root/rpmbuild/SPECS/%s"' % get_spec_file_name(), stdout=True, stderr=True, tty=True)
+    container_exec = client.exec_create(container=str(container['Id']), cmd='/bin/bash -c "/usr/bin/rpmbuild -ba /root/rpmbuild/SPECS/%s"' % get_spec_file_name(pb_tmp_dir), stdout=True, stderr=True, tty=True)
     return container_exec
 
 def get_rpm_from_container(client,container):
@@ -267,7 +267,7 @@ def get_rpm_from_container(client,container):
     tf = tarfile.open(fileobj=file_content)
     return tf
 
-def connect_docker(docker_client,system):
+def connect_docker(system):
     tries = 0
     while tries < 3:
         try:
@@ -281,31 +281,100 @@ def connect_docker(docker_client,system):
         raise ValueError("Could not verify that docker is running")
     return docker
 
-#def check_dockermachine_exists_and_running(system):
-#    # Verifies that docker-machine is installed
-#    cmd = ['/usr/local/bin/docker-machine']
-#    FNULL = open(os.devnull, 'w')
-#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-#    if returncode != 0:
-#        install_docker(system)
-#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-#    if returncode != 0:
-#        print "Could not find or install docker machine. Please verify if the docker-machine installation was succeded "
-#        sys.exit(1)
-#
-#    # Verifies that the docker vm called package-builder exists
-#    cmd = ['/usr/local/bin/docker-machine', 'status', 'package-builder'] 
-#    returncode = subprocess.Popen(cmd,stdout=FNULL).wait()
-#    if returncode != 0:
-#        create_machine_docker()
-#
-#    # Verifies that the vm docker is running
-#    stdout,stderr = subprocess.Popen(cmd,stdout=PIPE).communicate()
-#
-#    if stdout.strip() != 'Running':
-#        start_docker()
-#    else:
-#        print '\n - docker-machine package-builder is already running... \n'
+def build(system,args_spec,args_source,args_image,pb_tmp_dir):
+    # verify that docker-machine for mac or docker-engine for linux exists and it is running
+    install_docker(system)
+    # docker
+    docker = connect_docker(system)
+    # Set spec and source files
+    spec_file = get_spec(args_spec,pb_tmp_dir)
+    source_file = get_source(args_source,pb_tmp_dir)
+    # remove rpmbuild dir
+    remove_rpmbuild_dir('./%s' % pb_tmp_dir) 
+    # create a client to connect to docker-machine and use docker to manage containers
+    client = docker.from_env(assert_hostname=False)
+    # make base docker file
+    dockerfile_arr = file_lines(args_image)
+    # append spec dependences to docker file
+    dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr, spec_file)
+    print(dockerfile_arr)
+    # remove image before creating it
+    remove_existing_docker_images(client)
+    # preparing the dockerfile as string to be passed to the container as POST
+    dockerfile = "".join(dockerfile_arr)
+    file = BytesIO(dockerfile.encode('utf-8'))
+    # create an image with docker filer
+    create_docker_image(client,file)
+    # removing the container first.
+    remove_existing_docker_containers(client)
+    # creating a container
+    container=create_docker_container(client)
+    # start the container
+    print '\n - starting container... \n'
+    client.start(container)
+    # create a tarfile for rpmbuild because the docker api only accepts tar files =/
+    filedata = create_rpmbuild_tar(client,container,spec_file,source_file,pb_tmp_dir)
+    # transfer the rpmbuild tar to the container
+    transfer_tar_to_container(client,container,filedata,'/root/')
+    # remover rpmbuild tar
+    remove_rpmbuild_tar("rpmbuild.tar")
+    # we have to create a new instance of client because it raises a "Hijack is incompatible with use of CloseNotifier"
+    client2 = docker.from_env(assert_hostname=False)
+    # get the id of the execution and realizes it
+    container_exec = build_rpm(client2,container,pb_tmp_dir)
+    # start and print the execution of a command inside the running container
+    rpmbuild_log = client2.exec_start(exec_id=container_exec['Id'])
+    # get the tar file of the rpm and srpm from container
+    tf = get_rpm_from_container(client2,container)
+    # extract the tarfile of the folder generated with the rpm and srpm
+    tf.extractall(path='./%s/' % pb_tmp_dir)
+    print '\n - build complete! \n'
+
+def test(system,args_spec,args_source,args_image,pb_tmp_dir):
+    # verify that docker-machine for mac or docker-engine for linux exists and it is running
+    install_docker(system)
+    # docker
+    docker = connect_docker(system)
+    # Set spec and source files 
+    spec_file = get_spec(args_spec,pb_tmp_dir)
+    source_file = get_source(args_source,pb_tmp_dir)
+    # create a client to connect to docker-machine and use docker to manage containers
+    client = docker.from_env(assert_hostname=False)
+    # make base docker file
+    dockerfile_arr = file_lines(args_image)
+    # append spec dependences to docker file
+    dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr, spec_file)
+    # remove image before creating it
+    remove_existing_docker_images(client)
+    # preparing the dockerfile as string to be passed to the container as POST
+    dockerfile = "".join(dockerfile_arr)
+    file = BytesIO(dockerfile.encode('utf-8'))
+    # create an image with docker filer
+    create_docker_image(client,file)
+    # removing the container first.
+    remove_existing_docker_containers(client)
+    # creating a container
+    container=create_docker_container(client)
+    # start the container
+    print '\n - starting container... \n'
+    client.start(container)
+    # create a tarfile for rpmbuild because the docker api only accepts tar files =/
+    filedata = create_rpms_tar(client, container,pb_tmp_dir)
+    # transfer the rpmbuild tar to the container
+    transfer_tar_to_container(client,container,filedata,'/root/rpmbuild/')
+    # remover rpmbuild tar
+    remove_rpmbuild_tar("rpms.tar")
+
+    print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
+
+    if system == 'mac':
+        os.system("eval $(docker-machine env package-builder); docker exec -it package-builder /bin/bash")
+    elif system == 'linux':
+        os.system("export DOCKER_HOST='tcp://0.0.0.0:2375'; docker exec -it package-builder /bin/bash -c \"echo 'To test the RPM, use rpm -i to install the RPMs below:'; find /root/rpmbuild -name *.rpm;/bin/bash\"")
+    else:
+        raise ValueError("system not suported yet")
+    print '\n - stoping container... \n'
+    client.stop(container)
 
 def main():
     parser = argparse.ArgumentParser(prog='package-builder', description='Make loca enviroment to build OS packages with docker')
@@ -316,6 +385,7 @@ def main():
     parser.add_argument("-d", "--debug", action="store_true", help='print more logs') 
     parser.add_argument("-s", "--spec", default='', help='specify a spec file') 
     parser.add_argument("-o", "--source", default='', help='specify a source .tar.gz file') 
+    parser.add_argument("-n", "--session", default='', help='specify a temporary folder name') 
 
     if len(sys.argv)==1:
         parser.print_help()
@@ -323,112 +393,25 @@ def main():
 
     # Without this we cant connect to docker via python even if the pass the base_url=HOST. Bizarre
     os.environ['DOCKER_HOST']='tcp://0.0.0.0:2375'
-
     args = parser.parse_args()
     system = check_system()
+
+    if args.session != '':
+        pb_tmp_dir = 'package_builder_tmp%s' % args.session
+    else:
+        pb_tmp_dir = 'package_builder_tmp'
+
     # Start: package-builder --up
     if args.up == True:
-        if system == 'mac':
-            check_dockermachine_exists_and_running(system)
-        else:
-            install_docker(system)
+        install_docker(system)
     
     # Build: packege-builder --build
     if args.build == True:
-        # verify that docker-machine for mac or docker-engine for linux exists and it is running
-        install_docker(system)
-        # docker
-        docker = connect_docker(docker_client,system)
-        # Set spec and source files
-        spec_file = get_spec(args)
-        source_file = get_source(args)
-        # remove rpmbuild dir
-	remove_rpmbuild_dir('./package_builder_tmp')
-        # create a client to connect to docker-machine and use docker to manage containers
-        client = docker.from_env(assert_hostname=False)
-        # make base docker file
-        dockerfile_arr = file_lines(args.image)
-        # append spec dependences to docker file
-        dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr, spec_file)
-        print(dockerfile_arr)
-        # remove image before creating it
-        remove_existing_docker_images(client)
-        # preparing the dockerfile as string to be passed to the container as POST
-        dockerfile = "".join(dockerfile_arr)
-        file = BytesIO(dockerfile.encode('utf-8'))
-        # create an image with docker filer
-        create_docker_image(client,file)
-        # removing the container first.
-        remove_existing_docker_containers(client)
-        # creating a container 
-        container=create_docker_container(client)
-        # start the container
-        print '\n - starting container... \n'
-        client.start(container)
-        # create a tarfile for rpmbuild because the docker api only accepts tar files =/
-        filedata = create_rpmbuild_tar(client,container,spec_file,source_file)
-        # transfer the rpmbuild tar to the container
-        transfer_tar_to_container(client,container,filedata,'/root/')
-        # remover rpmbuild tar
-        remove_rpmbuild_tar("rpmbuild.tar")
-        # we have to create a new instance of client because it raises a "Hijack is incompatible with use of CloseNotifier"
-        client2 = docker.from_env(assert_hostname=False)
-        # get the id of the execution and realizes it
-        container_exec = build_rpm(client2,container)
-        # start and print the execution of a command inside the running container
-        rpmbuild_log = client2.exec_start(exec_id=container_exec['Id'])
-        # print more logs if debug is passed as parameter
-	if args.build == True:
-	    print rpmbuild_log
-        # get the tar file of the rpm and srpm from container
-        tf = get_rpm_from_container(client2,container)
-        # extract the tarfile of the folder generated with the rpm and srpm
-	tf.extractall(path='./package_builder_tmp/')
-	print '\n - build complete! \n'
+        build(system,args.spec,args.source,args.image,pb_tmp_dir)
 
     # Test install: package-builder --test
     if args.test == True:
-        # verify that docker-machine for mac or docker-engine for linux exists and it is running
-        install_docker(system)
-        # docker
-        docker = connect_docker(docker_client,system)
-        # Set spec and source files 
-        spec_file = get_spec(args)
-        source_file = get_source(args)
-        # create a client to connect to docker-machine and use docker to manage containers
-        client = docker.from_env(assert_hostname=False)
-        # make base docker file
-        dockerfile_arr = file_lines(args.image)
-        # append spec dependences to docker file
-        dockerfile_arr = append_build_require_to_docker_file(dockerfile_arr, spec_file)
-        # remove image before creating it
-        remove_existing_docker_images(client)
-        # preparing the dockerfile as string to be passed to the container as POST
-        dockerfile = "".join(dockerfile_arr)
-        file = BytesIO(dockerfile.encode('utf-8'))
-        # create an image with docker filer
-        create_docker_image(client,file)
-        # removing the container first.
-        remove_existing_docker_containers(client)
-        # creating a container
-        container=create_docker_container(client)
-        # start the container
-        print '\n - starting container... \n'
-        client.start(container)
-        # create a tarfile for rpmbuild because the docker api only accepts tar files =/
-        filedata = create_rpms_tar(client, container)
-        # transfer the rpmbuild tar to the container
-        transfer_tar_to_container(client,container,filedata,'/root/rpmbuild/')
-        # remover rpmbuild tar
-        remove_rpmbuild_tar("rpms.tar")
-
-        if system == 'mac':
-            print '\n - now execute the following command: export DOCKER_HOST="tcp://0.0.0.0:2375"; eval $(docker-machine env package-builder); docker exec -it package-builder /bin/bash\n'
-        elif system == 'linux':
-            print '\n - now execute the following command: export DOCKER_HOST="tcp://0.0.0.0:2375"; docker exec -it package-builder /bin/bash\n'
-        else:
-            raise ValueError("system not suported yet")
-	print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
+        test(system,args.spec,args.source,args.image,pb_tmp_dir)
 
 if __name__ == '__main__':
     main()
