@@ -171,8 +171,8 @@ def install_docker(system):
                 print ("EOF")
                 sys.exit(1) 
             else:
-                print ('\n - starting docker daemon on 0.0.0.0:2375\n')
-                os.system("nohup docker daemon -H tcp://0.0.0.0:2375 &")
+                print ('\n - starting docker daemon on tcp://0.0.0.0:2375\n')
+                os.system("docker daemon -H tcp://0.0.0.0:2375 > /dev/null &")
     else:
         raise ValueError("system not suported yet")
 
