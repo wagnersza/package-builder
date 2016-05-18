@@ -31,6 +31,7 @@ def build():
     file_source = request.files['source']
     if file_spec.filename == '' or file_source.filename == '' or image == '':
         return render_template('index.html', error="Error: The image, Spec or Source file was(were) not not specified")
+    session['image'] = image
     file_spec.save(os.path.join(web_upload_files, file_spec.filename))
     file_source.save(os.path.join(web_upload_files, file_source.filename))
     p = Popen(['/root/gotty -p 8888 --once package_builder/package_builder.py -b -s ./'+ web_upload_files +'/'+ file_spec.filename +' -o ./'+ web_upload_files +'/'+ file_source.filename +' -i '+ image +' -n '+ session['sess_num']], shell=True)
@@ -39,7 +40,7 @@ def build():
 
 @app.route('/test', methods=['GET'])
 def test():
-    p = Popen(['/root/gotty -w -p 8888 --once package_builder/package_builder.py -t -n '+ session['sess_num'] +' && docker stop package-builder'], shell=True)
+    p = Popen(['/root/gotty -w -p 8888 --once package_builder/package_builder.py -t -i '+ session['image'] +' -n '+ session['sess_num'] +' && docker stop package-builder'], shell=True)
     time.sleep(1)
     return render_template('test.html', url="http://192.168.56.101:8888/", sess_num=session['sess_num'])
 
