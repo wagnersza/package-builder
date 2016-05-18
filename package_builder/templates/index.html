@@ -1,7 +1,7 @@
 <!doctype html>
 <center>
 <h1>Package-Builder version 1.0</h1>
-<form action="/build" method="post">
+<form action="/build" method="post" enctype=multipart/form-data>
 Docker Image: <input type="text" name="image" placeholder="Docker Image" />
 <br>
 Spec File: <input type="file" name="spec" placeholder="Spec File" />
@@ -10,4 +10,5 @@ Source File: <input type="file" name="source" placeholder="Source File" />
 <br>
 <input type="submit" value="OK" />
 </form>
+<font color="red">{{ error }}</font>
 </center>

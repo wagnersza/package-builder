@@ -7,3 +7,5 @@ dist
 MANIFEST
 package_builder.egg-info
 Dockerfile
+package_builder_tmp*
+web_upload_files*

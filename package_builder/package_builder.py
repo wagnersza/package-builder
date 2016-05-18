@@ -320,18 +320,20 @@ def build(system,args_spec,args_source,args_image,pb_tmp_dir):
     remove_rpmbuild_tar("rpmbuild.tar")
     # we have to create a new instance of client because it raises a "Hijack is incompatible with use of CloseNotifier"
     client2 = docker.from_env(assert_hostname=False)
-    # get the id of the execution and realizes it
+    # get the executions id and runs it
     container_exec = build_rpm(client2,container,pb_tmp_dir)
-    # start and print the execution of a command inside the running container
+    # start and print commands execution inside the running container
     rpmbuild_log = client2.exec_start(exec_id=container_exec['Id'])
-    # get the tar file of the rpm and srpm from container
+    # get rpm and srpms tar files from container
     tf = get_rpm_from_container(client2,container)
-    # extract the tarfile of the folder generated with the rpm and srpm
+    # extract generated folders tar file with rpm and srpm
     tf.extractall(path='./%s/' % pb_tmp_dir)
+    # stop container
+    client2.stop(container)
     print '\n - build complete! \n'
 
 def test(system,args_spec,args_source,args_image,pb_tmp_dir):
-    # verify that docker-machine for mac or docker-engine for linux exists and it is running
+    # verifies if docker-machine for mac or docker-engine for linux exists and it is running
     install_docker(system)
     # docker
     docker = connect_docker(system)
@@ -365,14 +367,15 @@ def test(system,args_spec,args_source,args_image,pb_tmp_dir):
     # remover rpmbuild tar
     remove_rpmbuild_tar("rpms.tar")
 
-    print '\n - when loggued into container, run: rpm -i /root/rpmbuild/RPMS/<architecture>/<name-of-the-rpm>.rpm\n'
-
     if system == 'mac':
         os.system("eval $(docker-machine env package-builder); docker exec -it package-builder /bin/bash")
     elif system == 'linux':
-        os.system("export DOCKER_HOST='tcp://0.0.0.0:2375'; docker exec -it package-builder /bin/bash -c \"echo 'To test the RPM, use rpm -i to install the RPMs below:'; find /root/rpmbuild -name *.rpm;/bin/bash\"")
+        p = Popen(["export DOCKER_HOST='tcp://0.0.0.0:2375'; docker exec -it package-builder /bin/bash -c \"echo 'To test the RPM, use rpm -i to install the RPMs below:'; find /root/rpmbuild -name *.rpm;/bin/bash\""], shell=True)
     else:
         raise ValueError("system not suported yet")
+    
+    # wait for process to finish then stop the container
+    p.wait()
     print '\n - stoping container... \n'
     client.stop(container)
 
@@ -391,7 +394,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    # Without this we cant connect to docker via python even if the pass the base_url=HOST. Bizarre
+    # Without this we cant connect to docker via python even if we pass base_url=HOST. Bizarre
     os.environ['DOCKER_HOST']='tcp://0.0.0.0:2375'
     args = parser.parse_args()
     system = check_system()

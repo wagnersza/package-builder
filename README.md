@@ -14,11 +14,9 @@ using --test parameter.
 ## Install
 
 ```bash
-$ pip install git+https://github.com/wagnersza/package-builder
+$ pip install git+https://github.com/wagnersza/package-builder@0.1.3
 ```
 ## Preparing environment
-
-Install and start a new boot2docker VM and prepares the package development environment
 
 ```bash
 $ package-builder --up
